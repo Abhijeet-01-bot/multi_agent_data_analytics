@@ -61,77 +61,375 @@ class PlanningAgent:
         self.structured_model = structured_model
 
     @staticmethod
-    def build_plan_from_query_spec(
-        query_spec,
-    ) -> ExecutionPlan:
-        def column_name(value) -> str:
-            if hasattr(value, "value"):
-                return str(value.value)
-            return str(value)
+    def _build_deterministic_plan(
+        intent: IntentResult,
+    ) -> ExecutionPlan | None:
+        metrics = set(intent.metrics)
 
-        expected_columns = [
-            column_name(dimension)
-            for dimension in query_spec.dimensions
-        ]
-        expected_columns.append(
-            column_name(query_spec.metric)
+        dimensions = set(
+            intent.dimensions
+    )
+
+        filters = {
+            intent_filter.field: (
+            intent_filter.value
         )
+        for intent_filter
+        in intent.filters
+    }
 
-        task_type = TaskType.AGGREGATION
-        operation_names = {
-            column_name(operation).lower()
-            for operation in query_spec.operations
-        }
-
-        if "rank" in operation_names:
-            task_type = TaskType.RANKING
-        elif "trend" in operation_names:
-            task_type = TaskType.TREND_ANALYSIS
-
-        return ExecutionPlan(
-            plan_summary=(
-                "Compile and execute the normalized "
-                "analytical query specification."
+    # -----------------------------
+    # Total Order Count
+    # -----------------------------
+        if (
+            metrics == {"order_count"}
+            and not dimensions
+            and not filters
+        ):
+            task = AnalyticalTask(
+                task_id="T1",
+                description=(
+                "Count unique orders."
             ),
-            tasks=[
-                AnalyticalTask(
-                    task_id="T1",
-                    description=(
-                        "Execute the requested metric, "
-                        "dimensions and filters."
+                task_type=(
+                TaskType.AGGREGATION
+            ),
+                metrics=[
+                "order_count"
+            ],
+                dimensions=[],
+                filters=[],
+                required_tables=[
+                "Orders"
+            ],
+                expected_columns=[
+                "OrderCount"
+            ],
+            )
+
+            return ExecutionPlan(
+            plan_summary=(
+                "Calculate total order count."
+            ),
+            tasks=[task],
+            required_tables=[
+                "Orders"
+            ],
+            required_joins=[],
+            confidence=1.0,
+            )
+
+    # -----------------------------
+    # Total Net Revenue
+    # -----------------------------
+        if (
+            metrics == {"net_revenue"}
+            and not dimensions
+            and not filters
+        ):
+            task = AnalyticalTask(
+                task_id="T1",
+                description=(
+                "Calculate total net revenue."
+            ),
+                task_type=(
+                TaskType.AGGREGATION
+            ),
+                metrics=[
+                "net_revenue"
+            ],
+                dimensions=[],
+                filters=[],
+                required_tables=[
+                "Order Details"
+            ],
+                expected_columns=[
+                "NetRevenue"
+            ],
+            )
+
+            return ExecutionPlan(
+            plan_summary=(
+                "Calculate total net revenue."
+            ),
+            tasks=[task],
+            required_tables=[
+                "Order Details"
+            ],
+            required_joins=[],
+            confidence=1.0,
+            )
+
+    # -----------------------------
+    # Filtered Revenue
+    # -----------------------------
+        if (
+            metrics == {"net_revenue"}
+            and not dimensions
+            and set(filters.keys())
+            == {"ship_country"}
+        ):
+            country = filters[
+            "ship_country"
+            ]
+
+            task = AnalyticalTask(
+                task_id="T1",
+                description=(
+                "Calculate total net revenue "
+                f"for orders shipped to "
+                f"{country}."
+                ),
+                task_type=(
+                TaskType.AGGREGATION
+                ),
+                metrics=[
+                "net_revenue"
+                ],
+                dimensions=[],
+                filters=[
+                {
+                    "field": (
+                        "ship_country"
                     ),
-                    task_type=task_type,
-                    metrics=[
-                        query_spec.metric
-                    ],
-                    dimensions=(
-                        query_spec.dimensions
+                    "operator": (
+                        "equals"
                     ),
-                    filters=[
-                        query_filter.model_dump(
-                            mode="json"
-                        )
-                        for query_filter
-                        in query_spec.filters
-                    ],
-                    required_tables=[],
-                    expected_columns=(
-                        expected_columns
+                    "value": country,
+                }
+            ],
+                required_tables=[
+                "Orders",
+                "Order Details",
+            ],
+                expected_columns=[
+                "NetRevenue"
+            ],
+            )
+
+            return ExecutionPlan(
+            plan_summary=(
+                "Calculate country-level "
+                "filtered net revenue."
+            ),
+            tasks=[task],
+            required_tables=[
+                "Orders",
+                "Order Details",
+            ],
+            required_joins=[
+                RequiredJoin(
+                    left_table="Orders",
+                    left_column="OrderID",
+                    right_table=(
+                        "Order Details"
                     ),
+                    right_column="OrderID",
                 )
             ],
             confidence=1.0,
+            )
+
+    # -----------------------------
+    # Top Categories By Revenue
+    # -----------------------------
+        if (
+            metrics == {"net_revenue"}
+            and dimensions == {"category"}
+            and not filters
+        ):
+            safe_limit = max(
+                1,
+                min(
+                    int(
+                        intent.limit or 5
+                    ),
+                    100,
+                ),
+            )
+
+            task = AnalyticalTask(
+                task_id="T1",
+                description=(
+                "Calculate category net "
+                "revenue ranking."
+            ),
+                task_type=(
+                TaskType.RANKING
+            ),
+                metrics=[
+                "net_revenue"
+            ],
+                dimensions=[
+                "category"
+            ],
+                filters=[],
+                required_tables=[
+                "Order Details",
+                "Products",
+                "Categories",
+            ],
+                expected_columns=[
+                "CategoryName",
+                "NetRevenue",
+            ],
+            )
+
+            return ExecutionPlan(
+            plan_summary=(
+                "Rank categories by "
+                "net revenue."
+            ),
+            tasks=[task],
+            required_tables=[
+                "Order Details",
+                "Products",
+                "Categories",
+            ],
+            required_joins=[
+                RequiredJoin(
+                    left_table=(
+                        "Order Details"
+                    ),
+                    left_column=(
+                        "ProductID"
+                    ),
+                    right_table=(
+                        "Products"
+                    ),
+                    right_column=(
+                        "ProductID"
+                    ),
+                ),
+                RequiredJoin(
+                    left_table="Products",
+                    left_column=(
+                        "CategoryID"
+                    ),
+                    right_table=(
+                        "Categories"
+                    ),
+                    right_column=(
+                        "CategoryID"
+                    ),
+                ),
+            ],
+            confidence=1.0,
+            )
+
+    # -----------------------------
+    # Top Categories By Revenue
+    # In Country
+    # -----------------------------
+        if (
+            metrics == {"net_revenue"}
+            and dimensions == {"category"}
+            and "ship_country"
+            in filters
+        ):
+            country = filters[
+            "ship_country"
+            ]
+
+            task = AnalyticalTask(
+                task_id="T1",
+                description=(
+                "Calculate category "
+                "revenue in "
+                f"{country}."
+                ),
+                task_type=(
+                TaskType.RANKING
+                ),
+                metrics=[
+                "net_revenue"
+                ],
+                dimensions=[
+                "category"
+                ],
+                filters=[
+                {
+                    "field": (
+                        "ship_country"
+                    ),
+                    "operator": (
+                        "equals"
+                    ),
+                    "value": country,
+                }
+                ],
+            required_tables=[
+                "Orders",
+                "Order Details",
+                "Products",
+                "Categories",
+            ],
+            expected_columns=[
+                "CategoryName",
+                "NetRevenue",
+            ],
         )
 
+            return ExecutionPlan(
+            plan_summary=(
+                "Category revenue "
+                "ranking by country."
+            ),
+            tasks=[task],
+            required_tables=[
+                "Orders",
+                "Order Details",
+                "Products",
+                "Categories",
+            ],
+            required_joins=[
+                RequiredJoin(
+                    left_table="Orders",
+                    left_column="OrderID",
+                    right_table=(
+                        "Order Details"
+                    ),
+                    right_column="OrderID",
+                ),
+                RequiredJoin(
+                    left_table=(
+                        "Order Details"
+                    ),
+                    left_column=(
+                        "ProductID"
+                    ),
+                    right_table="Products",
+                    right_column=(
+                        "ProductID"
+                    ),
+                ),
+                RequiredJoin(
+                    left_table="Products",
+                    left_column=(
+                        "CategoryID"
+                    ),
+                    right_table=(
+                        "Categories"
+                    ),
+                    right_column=(
+                        "CategoryID"
+                    ),
+
+                ),
+            ],
+            confidence=1.0,
+            )
+
+        return None
     def create_plan(
         self,
         intent: IntentResult,
     ) -> ExecutionPlan:
         if intent.clarification_required:
             raise ValueError(
-                "The intent requires clarification before "
-                "a plan can be created."
-            )
+        "The intent requires clarification before "
+        "a plan can be created."
+    )
 
         if intent.unsupported_request:
             raise ValueError(
