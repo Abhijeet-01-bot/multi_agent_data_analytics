@@ -1,0 +1,52 @@
+metrics:
+
+  net_revenue:
+    display_name: Net Revenue
+    description: Revenue after line-item discount
+    formula: UnitPrice * Quantity * (1 - Discount)
+    aggregation: SUM
+    source_table: Order Details
+    source_columns:
+      - UnitPrice
+      - Quantity
+      - Discount
+
+  gross_revenue:
+    display_name: Gross Revenue
+    description: Revenue before discount
+    formula: UnitPrice * Quantity
+    aggregation: SUM
+    source_table: Order Details
+    source_columns:
+      - UnitPrice
+      - Quantity
+
+  order_count:
+    display_name: Order Count
+    description: Number of unique orders
+    formula: COUNT(DISTINCT OrderID)
+    aggregation: COUNT_DISTINCT
+    source_table: Orders
+    source_columns:
+      - OrderID
+
+  product_quantity:
+    display_name: Product Quantity
+    description: Total number of product units sold
+    formula: SUM(Quantity)
+    aggregation: SUM
+    source_table: Order Details
+    source_columns:
+      - Quantity
+
+  average_order_value:
+    display_name: Average Order Value
+    description: Net revenue divided by unique order count
+    formula: net_revenue / order_count
+    aggregation: DERIVED
+    source_tables:
+      - Orders
+      - Order Details
+    dependencies:
+      - net_revenue
+      - order_count

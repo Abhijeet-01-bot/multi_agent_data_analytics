@@ -1,0 +1,303 @@
+{
+  "database_name": "Northwind",
+  "database_dialect": "sqlite",
+  "tables": {
+    "Categories": {
+      "description": "Product category master data.",
+      "primary_key": ["CategoryID"],
+      "columns": {
+        "CategoryID": {
+          "type": "INTEGER",
+          "description": "Unique category identifier."
+        },
+        "CategoryName": {
+          "type": "TEXT",
+          "description": "Name of the product category."
+        },
+        "Description": {
+          "type": "TEXT",
+          "description": "Description of the category."
+        },
+        "Picture": {
+          "type": "BLOB",
+          "description": "Category image binary data."
+        }
+      }
+    },
+    "Customers": {
+      "description": "Customers that place orders.",
+      "primary_key": ["CustomerID"],
+      "columns": {
+        "CustomerID": {
+          "type": "TEXT",
+          "description": "Unique customer identifier."
+        },
+        "CompanyName": {
+          "type": "TEXT",
+          "description": "Customer company name."
+        },
+        "ContactName": {
+          "type": "TEXT",
+          "description": "Customer contact person."
+        },
+        "ContactTitle": {
+          "type": "TEXT",
+          "description": "Job title of the contact person."
+        },
+        "Address": {
+          "type": "TEXT",
+          "description": "Customer address."
+        },
+        "City": {
+          "type": "TEXT",
+          "description": "Customer city."
+        },
+        "Region": {
+          "type": "TEXT",
+          "description": "Customer region."
+        },
+        "PostalCode": {
+          "type": "TEXT",
+          "description": "Customer postal code."
+        },
+        "Country": {
+          "type": "TEXT",
+          "description": "Customer country."
+        },
+        "Phone": {
+          "type": "TEXT",
+          "description": "Customer telephone number."
+        },
+        "Fax": {
+          "type": "TEXT",
+          "description": "Customer fax number."
+        }
+      }
+    },
+    "Orders": {
+      "description": "Order header information. One row represents one order.",
+      "primary_key": ["OrderID"],
+      "columns": {
+        "OrderID": {
+          "type": "INTEGER",
+          "description": "Unique order identifier."
+        },
+        "CustomerID": {
+          "type": "TEXT",
+          "description": "Customer that placed the order."
+        },
+        "EmployeeID": {
+          "type": "INTEGER",
+          "description": "Employee responsible for the order."
+        },
+        "OrderDate": {
+          "type": "DATETIME",
+          "description": "Date on which the order was placed."
+        },
+        "RequiredDate": {
+          "type": "DATETIME",
+          "description": "Requested delivery date."
+        },
+        "ShippedDate": {
+          "type": "DATETIME",
+          "description": "Actual shipment date."
+        },
+        "ShipVia": {
+          "type": "INTEGER",
+          "description": "Identifier of the shipping company."
+        },
+        "Freight": {
+          "type": "NUMERIC",
+          "description": "Freight amount for the order."
+        },
+        "ShipName": {
+          "type": "TEXT",
+          "description": "Shipping recipient name."
+        },
+        "ShipAddress": {
+          "type": "TEXT",
+          "description": "Shipping address."
+        },
+        "ShipCity": {
+          "type": "TEXT",
+          "description": "Shipping city."
+        },
+        "ShipRegion": {
+          "type": "TEXT",
+          "description": "Shipping region."
+        },
+        "ShipPostalCode": {
+          "type": "TEXT",
+          "description": "Shipping postal code."
+        },
+        "ShipCountry": {
+          "type": "TEXT",
+          "description": "Destination country."
+        }
+      }
+    },
+    "Order Details": {
+      "description": "Individual product line items belonging to orders.",
+      "primary_key": ["OrderID", "ProductID"],
+      "columns": {
+        "OrderID": {
+          "type": "INTEGER",
+          "description": "Parent order identifier."
+        },
+        "ProductID": {
+          "type": "INTEGER",
+          "description": "Ordered product identifier."
+        },
+        "UnitPrice": {
+          "type": "NUMERIC",
+          "description": "Unit price recorded for the order line."
+        },
+        "Quantity": {
+          "type": "INTEGER",
+          "description": "Number of product units ordered."
+        },
+        "Discount": {
+          "type": "REAL",
+          "description": "Fractional discount from zero to one."
+        }
+      }
+    },
+    "Products": {
+      "description": "Products sold by the business.",
+      "primary_key": ["ProductID"],
+      "columns": {
+        "ProductID": {
+          "type": "INTEGER",
+          "description": "Unique product identifier."
+        },
+        "ProductName": {
+          "type": "TEXT",
+          "description": "Product name."
+        },
+        "SupplierID": {
+          "type": "INTEGER",
+          "description": "Supplier of the product."
+        },
+        "CategoryID": {
+          "type": "INTEGER",
+          "description": "Category containing the product."
+        },
+        "QuantityPerUnit": {
+          "type": "TEXT",
+          "description": "Packaging quantity description."
+        },
+        "UnitPrice": {
+          "type": "NUMERIC",
+          "description": "Current catalog price."
+        },
+        "UnitsInStock": {
+          "type": "INTEGER",
+          "description": "Units currently available."
+        },
+        "UnitsOnOrder": {
+          "type": "INTEGER",
+          "description": "Units already ordered from suppliers."
+        },
+        "ReorderLevel": {
+          "type": "INTEGER",
+          "description": "Stock level at which reordering is recommended."
+        },
+        "Discontinued": {
+          "type": "TEXT",
+          "description": "Whether the product has been discontinued."
+        }
+      }
+    },
+    "Suppliers": {
+      "description": "Companies that provide products.",
+      "primary_key": ["SupplierID"],
+      "columns": {
+        "SupplierID": {
+          "type": "INTEGER",
+          "description": "Unique supplier identifier."
+        },
+        "CompanyName": {
+          "type": "TEXT",
+          "description": "Supplier company name."
+        },
+        "ContactName": {
+          "type": "TEXT",
+          "description": "Supplier contact name."
+        },
+        "ContactTitle": {
+          "type": "TEXT",
+          "description": "Supplier contact title."
+        },
+        "Address": {
+          "type": "TEXT",
+          "description": "Supplier address."
+        },
+        "City": {
+          "type": "TEXT",
+          "description": "Supplier city."
+        },
+        "Region": {
+          "type": "TEXT",
+          "description": "Supplier region."
+        },
+        "PostalCode": {
+          "type": "TEXT",
+          "description": "Supplier postal code."
+        },
+        "Country": {
+          "type": "TEXT",
+          "description": "Supplier country."
+        },
+        "Phone": {
+          "type": "TEXT",
+          "description": "Supplier phone number."
+        },
+        "Fax": {
+          "type": "TEXT",
+          "description": "Supplier fax number."
+        },
+        "HomePage": {
+          "type": "TEXT",
+          "description": "Supplier website information."
+        }
+      }
+    }
+  },
+  "relationships": [
+    {
+      "from_table": "Customers",
+      "from_column": "CustomerID",
+      "to_table": "Orders",
+      "to_column": "CustomerID",
+      "relationship": "one_to_many"
+    },
+    {
+      "from_table": "Orders",
+      "from_column": "OrderID",
+      "to_table": "Order Details",
+      "to_column": "OrderID",
+      "relationship": "one_to_many"
+    },
+    {
+      "from_table": "Products",
+      "from_column": "ProductID",
+      "to_table": "Order Details",
+      "to_column": "ProductID",
+      "relationship": "one_to_many"
+    },
+    {
+      "from_table": "Categories",
+      "from_column": "CategoryID",
+      "to_table": "Products",
+      "to_column": "CategoryID",
+      "relationship": "one_to_many"
+    },
+    {
+      "from_table": "Suppliers",
+      "from_column": "SupplierID",
+      "to_table": "Products",
+      "to_column": "SupplierID",
+      "relationship": "one_to_many"
+    }
+  ]
+}

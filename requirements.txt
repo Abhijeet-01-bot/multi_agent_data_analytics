@@ -1,0 +1,37 @@
+# User interface
+streamlit
+
+# Agent orchestration
+langgraph
+langchain-core
+
+# Choose the LLM provider package you will use
+langchain-google-genai
+
+# Data validation
+pydantic
+pydantic-settings
+
+# Environment configuration
+python-dotenv
+
+# Database
+sqlalchemy
+
+# SQL parsing and validation
+sqlglot
+
+# Data analysis
+pandas
+numpy
+scipy
+
+# Visualizations
+plotly
+
+# Testing
+pytest
+pytest-mock
+
+
+pyyaml

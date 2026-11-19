@@ -1,0 +1,29 @@
+# Virtual environment
+.venv/
+venv/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs and generated outputs
+logs/
+outputs/charts/*
+outputs/reports/*
+
+# Local temporary database files
+*.db-journal
+*.sqlite-journal
+
+# St*eamlit
+.streamlit/secrets.toml
+```*

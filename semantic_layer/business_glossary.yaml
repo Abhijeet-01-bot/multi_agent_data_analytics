@@ -1,0 +1,31 @@
+terms:
+
+  sales:
+    metric: net_revenue
+
+  revenue:
+    metric: net_revenue
+
+  income:
+    metric: net_revenue
+
+  orders:
+    metric: order_count
+
+  products:
+    table: Products
+
+  customers:
+    table: Customers
+
+  suppliers:
+    table: Suppliers
+
+  categories:
+    table: Categories
+
+  countries:
+    field: Country
+
+  discount:
+    field: Discount
