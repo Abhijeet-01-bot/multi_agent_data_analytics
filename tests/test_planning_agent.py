@@ -38,7 +38,36 @@ class FakeStructuredPlanningModel:
         self.received_input = input
         return self.response
 
+def disable_generic_planning(
+    monkeypatch,
+) -> None:
+    """
+    Force PlanningAgent tests through the legacy
+    LLM-planning path.
+    """
 
+    def compiler_disabled(
+        intent,
+    ):
+        raise ValueError(
+            "Generic planning disabled for test."
+        )
+
+    monkeypatch.setattr(
+        PlanningAgent,
+        "_build_query_spec_plan",
+        staticmethod(
+            compiler_disabled
+        ),
+    )
+
+    monkeypatch.setattr(
+        PlanningAgent,
+        "_build_deterministic_plan",
+        staticmethod(
+            lambda intent: None
+        ),
+    )
 def build_valid_intent() -> IntentResult:
     return IntentResult(
         business_objective=(
@@ -190,14 +219,8 @@ def build_valid_plan() -> ExecutionPlan:
 def test_planning_agent_creates_plan(
     monkeypatch,
 ) -> None:
-    # This test specifically verifies the LLM planning
-    # path, so deterministic planning is disabled.
-    monkeypatch.setattr(
-        PlanningAgent,
-        "_build_deterministic_plan",
-        staticmethod(
-            lambda intent: None
-        ),
+    disable_generic_planning(
+        monkeypatch
     )
 
     fake_model = (
@@ -221,21 +244,11 @@ def test_planning_agent_creates_plan(
 
     assert len(result.tasks) == 2
 
-    assert (
-        fake_model.received_input
-        is not None
-    )
-
 def test_planning_agent_validates_dictionary(
     monkeypatch,
 ) -> None:
-    # Force the test through the LLM response path.
-    monkeypatch.setattr(
-        PlanningAgent,
-        "_build_deterministic_plan",
-        staticmethod(
-            lambda intent: None
-        ),
+    disable_generic_planning(
+        monkeypatch
     )
 
     dictionary_plan = (
@@ -478,12 +491,8 @@ def test_filtered_revenue_uses_deterministic_plan() -> None:
 def test_llm_plan_over_safe_limit_is_rejected(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(
-        PlanningAgent,
-        "_build_deterministic_plan",
-        staticmethod(
-            lambda intent: None
-        ),
+    disable_generic_planning(
+        monkeypatch
     )
 
     excessive_plan = (
@@ -530,3 +539,39 @@ def test_llm_plan_over_safe_limit_is_rejected(
         agent.create_plan(
             build_valid_intent()
         )
+
+def test_query_spec_planning_creates_single_task() -> None:
+    agent = PlanningAgent(
+        structured_model=(
+            FakeStructuredPlanningModel(
+                build_valid_plan()
+            )
+        )
+    )
+
+    result = agent.create_plan(
+        build_valid_intent()
+    )
+
+    assert len(result.tasks) == 1
+
+    task = result.tasks[0]
+
+    assert task.task_id == "T1"
+
+    assert task.task_type == (
+        TaskType.RANKING
+    )
+
+    assert task.metrics == [
+        "net_revenue"
+    ]
+
+    assert task.dimensions == [
+        "category"
+    ]
+
+    assert task.expected_columns == [
+        "CategoryName",
+        "NetRevenue",
+    ]

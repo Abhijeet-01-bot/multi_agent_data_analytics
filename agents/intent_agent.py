@@ -151,11 +151,27 @@ class IntentUnderstandingAgent:
                 f"{type(raw_result).__name__}"
             )
 
-        normalized_data = self._normalize_intent_data(
-            user_question=cleaned_question,
-            intent_data=intent_data,
+        normalized_data = (
+            self._normalize_intent_data(
+                user_question=(
+                    cleaned_question
+                ),
+                intent_data=intent_data,
+            )
         )
 
+        # Final defensive normalization before Pydantic
+        # validates the IntentResult.
+        normalized_data["filters"] = (
+            self._flatten_filters(
+                normalized_data.get(
+                    "filters",
+                    [],
+                )
+            )
+        )
+
+        
         return IntentResult.model_validate(
             normalized_data
         )
@@ -241,6 +257,54 @@ class IntentUnderstandingAgent:
                 normalized.get("dimensions")
             )
         )
+        known_category_phrases = {
+            "beverages",
+            "condiments",
+            "confections",
+            "dairy products",
+            "grains/cereals",
+            "meat/poultry",
+            "produce",
+            "seafood",
+        }
+
+        lower_question = (
+            user_question.lower()
+        )
+
+        category_names_present = any(
+            category_phrase
+            in lower_question
+            for category_phrase
+            in known_category_phrases
+        )
+
+        explicit_product_request = bool(
+            re.search(
+                (
+                    r"\bproduct-level\b"
+                    r"|\bby product\b"
+                    r"|\bindividual products\b"
+                    r"|\bproduct names?\b"
+                ),
+                lower_question,
+            )
+        )
+
+        if (
+            category_names_present
+            and not explicit_product_request
+        ):
+            normalized[
+                "dimensions"
+            ] = [
+                dimension
+                for dimension
+                in normalized[
+                    "dimensions"
+                ]
+                if dimension != "product"
+            ]
 
         normalized["analysis_types"] = (
             cls._normalize_list(
@@ -248,7 +312,22 @@ class IntentUnderstandingAgent:
                     "analysis_types"
                 )
             )
+        )        
+        analysis_type_values = set(
+            normalized[
+                "analysis_types"
+            ]
         )
+
+        if (
+            AnalysisType.RANKING.value
+            not in analysis_type_values
+        ):
+            normalized[
+                "sort_direction"
+            ] = None
+
+            normalized["limit"] = None
 
         normalized["ambiguity_reasons"] = (
             cls._normalize_list(
@@ -404,20 +483,117 @@ class IntentUnderstandingAgent:
                 inferred_dimensions,
             )
         )
-
-        # Add supported filters when explicit values are
-        # present and the model omitted them.
-        normalized["filters"] = (
-    cls._normalize_filters(
-        question=user_question.strip(),
-        existing_filters=(
-            normalized.get(
-                "filters",
-                []
+        # Clean dimensions only after model-provided and
+        # deterministically inferred dimensions have been
+        # merged.
+        normalized["dimensions"] = (
+            cls._normalize_dimensions(
+                user_question=(
+                    user_question
+                ),
+                dimensions=(
+                    normalized[
+                        "dimensions"
+                    ]
+                ),
             )
-        ),
-    )
-)
+        )
+
+        # Normalize general filters such as shipping
+        # country and customer country.
+        normalized["filters"] = (
+            cls._normalize_filters(
+                question=user_question.strip(),
+                existing_filters=(
+                    normalized.get(
+                        "filters",
+                        [],
+                    )
+                ),
+            )
+        )
+
+        # Add category values such as Beverages and
+        # Dairy Products when explicitly mentioned.
+        normalized["filters"] = (
+            cls._normalize_category_filters(
+                question=user_question.strip(),
+                dimensions=(
+                    normalized[
+                        "dimensions"
+                    ]
+                ),
+                existing_filters=(
+                    normalized[
+                        "filters"
+                    ]
+                ),
+            )
+        )
+
+        # Flatten any nested filter lists returned by the
+        # local model or introduced by normalization.
+        normalized["filters"] = (
+            cls._flatten_filters(
+                normalized.get(
+                    "filters",
+                    [],
+                )
+            )
+        )
+
+        # Remove filters with missing or empty values.
+        cleaned_filters: list = []
+
+        for intent_filter in normalized[
+            "filters"
+        ]:
+            if isinstance(
+                intent_filter,
+                dict,
+            ):
+                filter_value = (
+                    intent_filter.get(
+                        "value"
+                    )
+                )
+            else:
+                filter_value = getattr(
+                    intent_filter,
+                    "value",
+                    None,
+                )
+
+            if filter_value is None:
+                continue
+
+            if (
+                isinstance(
+                    filter_value,
+                    str,
+                )
+                and not filter_value.strip()
+            ):
+                continue
+
+            if (
+                isinstance(
+                    filter_value,
+                    (list, tuple, set),
+                )
+                and len(filter_value) == 0
+            ):
+                continue
+
+            cleaned_filters.append(
+                intent_filter
+            )
+
+        normalized["filters"] = (
+            cleaned_filters
+        )
+    
+
 
         # Infer safe analytical operations.
         normalized["analysis_types"] = (
@@ -699,10 +875,91 @@ class IntentUnderstandingAgent:
         )
 
     @staticmethod
+    def _normalize_dimensions(
+        user_question: str,
+        dimensions: list[str],
+    ) -> list[str]:
+        """
+        Remove dimensions inferred from words that are
+        actually part of known Northwind entity values.
+
+        Example:
+        "Dairy Products" is a category value. It must not
+        cause the product dimension to be added.
+        """
+
+        normalized_dimensions = list(
+            dict.fromkeys(dimensions)
+        )
+
+        lower_question = (
+            user_question.strip().lower()
+        )
+
+        known_category_names = {
+            "beverages",
+            "condiments",
+            "confections",
+            "dairy products",
+            "grains/cereals",
+            "meat/poultry",
+            "produce",
+            "seafood",
+        }
+
+        contains_category_name = any(
+            category_name in lower_question
+            for category_name
+            in known_category_names
+        )
+
+        explicit_product_dimension = bool(
+            re.search(
+                (
+                    r"\bby\s+product\b"
+                    r"|\bproduct[- ]level\b"
+                    r"|\bindividual\s+products?\b"
+                    r"|\bproduct\s+names?\b"
+                    r"|\bproducts?\s+by\b"
+                ),
+                lower_question,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        if (
+            contains_category_name
+            and not explicit_product_dimension
+        ):
+            normalized_dimensions = [
+                dimension
+                for dimension
+                in normalized_dimensions
+                if dimension != "product"
+            ]
+
+        return normalized_dimensions
+     
+    @staticmethod
     def _infer_dimensions(
         question: str,
     ) -> list[str]:
         mappings = [
+                        (
+                (
+                    r"\bcategory\b"
+                    r"|\bcategories\b"
+                    r"|\bbeverages\b"
+                    r"|\bcondiments\b"
+                    r"|\bconfections\b"
+                    r"|\bdairy products\b"
+                    r"|\bgrains/cereals\b"
+                    r"|\bmeat/poultry\b"
+                    r"|\bproduce\b"
+                    r"|\bseafood\b"
+                ),
+                "category",
+            ),
             (
                 r"\bcategory\b|\bcategories\b",
                 "category",
@@ -750,30 +1007,69 @@ class IntentUnderstandingAgent:
 
         return dimensions
 
+ 
+    @staticmethod
+    def _flatten_filters(
+        filters: object,
+    ) -> list:
+        """
+        Flatten nested filter collections.
+
+        Examples:
+        [[{"field": "ship_country", ...}]]
+        becomes:
+        [{"field": "ship_country", ...}]
+
+        [[]] becomes [].
+        """
+
+        if filters is None:
+            return []
+
+        if not isinstance(
+            filters,
+            (list, tuple),
+        ):
+            return [filters]
+
+        flattened: list = []
+
+        for item in filters:
+            if isinstance(
+                item,
+                (list, tuple),
+            ):
+                flattened.extend(
+                    IntentUnderstandingAgent
+                    ._flatten_filters(
+                        item
+                    )
+                )
+            else:
+                flattened.append(
+                    item
+                )
+
+        return flattened
+    
     @staticmethod
     def _normalize_filters(
         question: str,
-        existing_filters: Any,
+        existing_filters: object,
     ) -> list:
         """
         Preserve existing filters and extract explicit
-        shipping-country or customer-country filters.
-
-        General geographic wording defaults to shipping
-        geography unless the question explicitly refers
-        to customers.
+        geographic filters from the original question.
         """
 
         filters = (
-            list(existing_filters)
-            if isinstance(
-                existing_filters,
-                list,
+            IntentUnderstandingAgent
+            ._flatten_filters(
+                existing_filters
             )
-            else []
         )
 
-        existing_filter_fields = {
+        existing_fields = {
             (
                 item.get("field")
                 if isinstance(item, dict)
@@ -786,67 +1082,49 @@ class IntentUnderstandingAgent:
             for item in filters
         }
 
-        def clean_filter_value(
+        def clean_value(
             value: str,
         ) -> str:
-            return (
-                value.strip()
-                .strip(
-                    ".,;:!?\"'"
-                )
+            return value.strip().strip(
+                ".,;:!?\"'"
             )
 
-        # Explicit shipping geography:
-        # "orders shipped to Germany"
-        # "shipped to country France"
-        shipping_match = re.search(
+        shipping_pattern = re.compile(
             (
                 r"\b(?:orders?\s+)?"
                 r"(?:shipped|delivered)\s+to"
                 r"(?:\s+country)?\s+"
-                r"([A-Za-z][A-Za-z0-9_ -]*?)"
-                r"(?="
-                r"\s+(?:by|for|during|between|in)\b"
-                r"|[.,;:!?]"
-                r"|$"
-                r")"
-            ),
-            question,
-            flags=re.IGNORECASE,
-        )
-
-        # Explicit customer geography:
-        # "customers in Germany"
-        # "customers based in France"
-        customer_country_match = re.search(
-            (
-                r"\bcustomers?\s+"
-                r"(?:based\s+in|located\s+in|"
-                r"from|in)\s+"
-                r"([A-Za-z][A-Za-z0-9_ -]*?)"
+                r"([A-Za-z][A-Za-z0-9_ /-]*?)"
                 r"(?="
                 r"\s+(?:by|for|during|between)\b"
                 r"|[.,;:!?]"
                 r"|$"
                 r")"
             ),
-            question,
             flags=re.IGNORECASE,
         )
 
-        # General analytical geography:
-        # "revenue in Germany"
-        # "sales in France"
-        # "orders in Brazil"
-        #
-        # This fallback is used only when neither shipping
-        # nor customer geography was explicitly stated.
-        general_country_match = re.search(
+        customer_pattern = re.compile(
             (
-                r"\b(?:revenue|sales|orders?|"
-                r"net\s+revenue|gross\s+revenue)"
+                r"\bcustomers?\s+"
+                r"(?:based\s+in|located\s+in|from|in)"
+                r"\s+"
+                r"([A-Za-z][A-Za-z0-9_ /-]*?)"
+                r"(?="
+                r"\s+(?:by|for|during|between)\b"
+                r"|[.,;:!?]"
+                r"|$"
+                r")"
+            ),
+            flags=re.IGNORECASE,
+        )
+
+        general_country_pattern = re.compile(
+            (
+                r"\b(?:net\s+revenue|gross\s+revenue|"
+                r"revenue|sales|orders?)"
                 r"(?:\s+\w+){0,4}?\s+in\s+"
-                r"([A-Za-z][A-Za-z0-9_ -]*?)"
+                r"([A-Za-z][A-Za-z0-9_ /-]*?)"
                 r"(?="
                 r"\s+(?:by|for|during|between|"
                 r"ranked|rank|grouped)\b"
@@ -854,16 +1132,29 @@ class IntentUnderstandingAgent:
                 r"|$"
                 r")"
             ),
-            question,
             flags=re.IGNORECASE,
         )
 
+        shipping_match = shipping_pattern.search(
+            question
+        )
+
+        customer_match = customer_pattern.search(
+            question
+        )
+
+        general_match = (
+            general_country_pattern.search(
+                question
+            )
+        )
+
         if (
-            shipping_match
+            shipping_match is not None
             and "ship_country"
-            not in existing_filter_fields
+            not in existing_fields
         ):
-            country = clean_filter_value(
+            country = clean_value(
                 shipping_match.group(1)
             )
 
@@ -878,17 +1169,17 @@ class IntentUnderstandingAgent:
                     )
                 )
 
-                existing_filter_fields.add(
+                existing_fields.add(
                     "ship_country"
                 )
 
         if (
-            customer_country_match
+            customer_match is not None
             and "customer_country"
-            not in existing_filter_fields
+            not in existing_fields
         ):
-            country = clean_filter_value(
-                customer_country_match.group(1)
+            country = clean_value(
+                customer_match.group(1)
             )
 
             if country:
@@ -902,21 +1193,21 @@ class IntentUnderstandingAgent:
                     )
                 )
 
-                existing_filter_fields.add(
+                existing_fields.add(
                     "customer_country"
                 )
 
         if (
-            not shipping_match
-            and not customer_country_match
-            and general_country_match
+            shipping_match is None
+            and customer_match is None
+            and general_match is not None
             and "ship_country"
-            not in existing_filter_fields
+            not in existing_fields
             and "customer_country"
-            not in existing_filter_fields
+            not in existing_fields
         ):
-            country = clean_filter_value(
-                general_country_match.group(1)
+            country = clean_value(
+                general_match.group(1)
             )
 
             if country:
@@ -931,64 +1222,212 @@ class IntentUnderstandingAgent:
                 )
 
         return filters
+
+    @staticmethod
+    def _normalize_category_filters(
+        question: str,
+        dimensions: list[str],
+        existing_filters: object,
+    ) -> list:
+        """
+        Extract explicitly mentioned Northwind category
+        values from the user question.
+        """
+
+        filters = (
+            IntentUnderstandingAgent
+            ._flatten_filters(
+                existing_filters
+            )
+        )
+
+        if "category" not in dimensions:
+            return filters
+
+        category_filter_exists = any(
+            (
+                item.get("field")
+                if isinstance(item, dict)
+                else getattr(
+                    item,
+                    "field",
+                    None,
+                )
+            )
+            == "category"
+            for item in filters
+        )
+
+        if category_filter_exists:
+            return filters
+
+        known_categories = [
+            "Beverages",
+            "Condiments",
+            "Confections",
+            "Dairy Products",
+            "Grains/Cereals",
+            "Meat/Poultry",
+            "Produce",
+            "Seafood",
+        ]
+
+        lowercase_question = (
+            question.lower()
+        )
+
+        matches = [
+            category
+            for category in known_categories
+            if category.lower()
+            in lowercase_question
+        ]
+
+        if len(matches) == 1:
+            filters.append(
+                IntentFilter(
+                    field="category",
+                    operator="equals",
+                    value=matches[0],
+                ).model_dump(
+                    mode="json"
+                )
+            )
+
+        elif len(matches) > 1:
+            filters.append(
+                IntentFilter(
+                    field="category",
+                    operator="in",
+                    value=matches,
+                ).model_dump(
+                    mode="json"
+                )
+            )
+
+        return filters
+
     @staticmethod
     def _infer_analysis_types(
         question: str,
-    ) -> list[str]:
+    ) -> list:
+        """
+        Infer supported analytical operations from the
+        original user question.
+
+        This method adds only operation types supported by
+        the current IntentResult schema.
+        """
+
         analysis_types: list[str] = []
 
         if re.search(
-            r"\btop\b|\bhighest\b|\bmost\b|\bbottom\b|\blowest\b|\bleast\b|\brank\b",
+            (
+                r"\btop\b"
+                r"|\bbottom\b"
+                r"|\bhighest\b"
+                r"|\blowest\b"
+                r"|\bmost\b"
+                r"|\bleast\b"
+                r"|\brank\b"
+                r"|\branking\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             analysis_types.append(
                 AnalysisType.RANKING.value
             )
 
         if re.search(
-            r"\bcompare\b|\bversus\b|\bvs\.?\b|\bdifference\b",
+            (
+                r"\bcompare\b"
+                r"|\bcomparison\b"
+                r"|\bversus\b"
+                r"|\bvs\.?\b"
+                r"|\bdifference\b"
+                r"|\bbetween\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             analysis_types.append(
                 AnalysisType.COMPARISON.value
             )
 
         if re.search(
-            r"\bmonthly\b|\bquarterly\b|\byearly\b|\btrend\b|\bover time\b",
+            (
+                r"\bmonthly\b"
+                r"|\bby month\b"
+                r"|\bquarterly\b"
+                r"|\bby quarter\b"
+                r"|\byearly\b"
+                r"|\bby year\b"
+                r"|\bannual\b"
+                r"|\bover time\b"
+                r"|\btrend\b"
+                r"|\bthroughout the years\b"
+                r"|\byear[- ]over[- ]year\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             analysis_types.append(
                 AnalysisType.TREND.value
             )
 
         if re.search(
-            r"\bwhy\b|\bcause\b|\bdriver\b",
+            (
+                r"\bwhy\b"
+                r"|\bcause\b"
+                r"|\bcaused\b"
+                r"|\bdriver\b"
+                r"|\bdriven by\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             analysis_types.append(
                 AnalysisType.ROOT_CAUSE.value
             )
 
         if re.search(
-            r"\bhow many\b|\btotal\b|\bsum\b|\baverage\b",
+            (
+                r"\bhow many\b"
+                r"|\btotal\b"
+                r"|\bsum\b"
+                r"|\baverage\b"
+                r"|\brevenue\b"
+                r"|\bsales\b"
+                r"|\bcount\b"
+                r"|\bquantity\b"
+                r"|\bunits\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             analysis_types.append(
                 AnalysisType.AGGREGATION.value
             )
 
-        # Ranking and grouped metric questions inherently
-        # require aggregation.
-        if (
-            AnalysisType.RANKING.value
+        # Ranking, comparison, and trend queries normally
+        # aggregate a metric by one or more dimensions.
+        if any(
+            analysis_type
             in analysis_types
+            for analysis_type in {
+                AnalysisType.RANKING.value,
+                AnalysisType.COMPARISON.value,
+                AnalysisType.TREND.value,
+            }
         ):
             analysis_types.append(
                 AnalysisType.AGGREGATION.value
             )
 
         return (
-            IntentUnderstandingAgent._merge_unique(
+            IntentUnderstandingAgent
+            ._merge_unique(
                 [],
                 analysis_types,
             )

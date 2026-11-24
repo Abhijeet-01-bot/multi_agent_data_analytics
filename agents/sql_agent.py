@@ -31,6 +31,13 @@ from tools.sql_identifier_normalizer import (
     normalize_table_names,
 )
 
+from semantic.query_spec_builder import (
+    build_query_spec,
+)
+from tools.query_compiler import (
+    compile_query_spec,
+)
+
 
 class StructuredSQLModel(Protocol):
     def invoke(
@@ -519,7 +526,61 @@ class SQLGenerationAgent:
         templates for known simple metrics and a bounded
         LLM correction loop for complex tasks.
         """
+        try:
+            query_spec = build_query_spec(
+                intent
+            )
 
+            compiled_query = (
+                compile_query_spec(
+                    query_spec=query_spec,
+                    task_id=task.task_id,
+                )
+            )
+
+        except ValueError:
+            compiled_query = None
+
+        if compiled_query is not None:
+            validation = validate_sql(
+                compiled_query.sql
+            )
+
+            if not validation.is_valid:
+                return SQLTaskResult(
+                    success=False,
+                    task_id=task.task_id,
+                    attempts=1,
+                    query=compiled_query,
+                    validation=validation,
+                    execution=None,
+                    correction_history=[],
+                    errors=validation.errors,
+                )
+
+            execution = (
+                execute_read_only_query(
+                    sql=compiled_query.sql,
+                    parameters=(
+                        compiled_query.parameters
+                    ),
+                )
+            )
+
+            return SQLTaskResult(
+                success=execution.success,
+                task_id=task.task_id,
+                attempts=1,
+                query=compiled_query,
+                validation=validation,
+                execution=execution,
+                correction_history=[],
+                errors=(
+                    []
+                    if execution.success
+                    else execution.errors
+                ),
+            )
         deterministic_query = (
         self._build_deterministic_query(
         intent=intent,

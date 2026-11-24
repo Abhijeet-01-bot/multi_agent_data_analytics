@@ -16,7 +16,7 @@ from schemas.planning_schemas import (
 from schemas.sql_generation_schemas import (
     GeneratedSQLQuery,
 )
-
+from semantic.query_spec_builder import build_query_spec
 
 class SequenceSQLModel:
     """
@@ -47,6 +47,33 @@ class SequenceSQLModel:
 
         return response
 
+def disable_compiled_and_deterministic_sql(
+    monkeypatch,
+) -> None:
+    """
+    Force SQLGenerationAgent tests through the
+    legacy LLM generation and retry path.
+    """
+
+    def query_spec_disabled(
+        intent,
+    ):
+        raise ValueError(
+            "QuerySpec compiler disabled for test."
+        )
+
+    monkeypatch.setattr(
+        "agents.sql_agent.build_query_spec",
+        query_spec_disabled,
+    )
+
+    monkeypatch.setattr(
+        SQLGenerationAgent,
+        "_build_deterministic_query",
+        staticmethod(
+            lambda intent, task: None
+        ),
+    )
 
 def build_intent() -> IntentResult:
     return IntentResult(
@@ -190,12 +217,8 @@ def build_valid_query() -> GeneratedSQLQuery:
 def test_sql_agent_executes_valid_query(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(
-        SQLGenerationAgent,
-        "_build_deterministic_query",
-        staticmethod(
-            lambda intent, task: None
-        ),
+    disable_compiled_and_deterministic_sql(
+        monkeypatch
     )
 
     model = SequenceSQLModel(
@@ -233,12 +256,8 @@ def test_sql_agent_executes_valid_query(
 def test_sql_agent_corrects_unknown_table(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(
-        SQLGenerationAgent,
-        "_build_deterministic_query",
-        staticmethod(
-            lambda intent, task: None
-        ),
+    disable_compiled_and_deterministic_sql(
+        monkeypatch
     )
 
     invalid_query = GeneratedSQLQuery(
@@ -296,12 +315,8 @@ def test_sql_agent_corrects_unknown_table(
 def test_sql_agent_corrects_execution_error(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(
-        SQLGenerationAgent,
-        "_build_deterministic_query",
-        staticmethod(
-            lambda intent, task: None
-        ),
+    disable_compiled_and_deterministic_sql(
+        monkeypatch
     )
 
     invalid_column_query = GeneratedSQLQuery(
@@ -491,8 +506,8 @@ def test_simple_order_count_uses_deterministic_sql() -> None:
     assert model.call_count == 0
 
     assert (
-        "COUNT(DISTINCT OrderID)"
-        in result.query.sql
+    "COUNT(DISTINCT o.OrderID)"
+    in result.query.sql
     )
 
     assert (
@@ -578,9 +593,11 @@ def test_category_revenue_ranking_uses_deterministic_sql() -> None:
     sql = result.query.sql
 
     assert (
-        'JOIN "Order Details" AS od'
-        in sql
+    'FROM "Order Details" AS od'
+    in sql
     )
+    assert "JOIN Products AS p" in sql
+    assert "JOIN Categories AS c" in sql
 
     assert (
         "ON od.ProductID = p.ProductID"
@@ -593,18 +610,21 @@ def test_category_revenue_ranking_uses_deterministic_sql() -> None:
     )
 
     assert (
-        "WHERE o.ShipCountry = "
-        ":ship_country"
-        in sql
+    "o.ShipCountry = :filter_0"
+    in " ".join(
+        sql.split()
     )
+)
+    assert result.query.parameters == {
+    "filter_0": "Germany"
+}
+
 
     assert "GROUP BY" in sql
     assert "ORDER BY" in sql
     assert "LIMIT 5" in sql
 
-    assert result.query.parameters == {
-        "ship_country": "Germany"
-    }
+    
 
     assert result.execution.columns == [
         "CategoryName",
@@ -714,10 +734,10 @@ def test_filtered_revenue_with_no_matches_returns_empty() -> None:
     assert result.execution is not None
 
     assert result.query.parameters == {
-        "ship_country": (
-            "XYZ_NONEXISTENT"
-        )
-    }
+    "filter_0": (
+        "XYZ_NONEXISTENT"
+    )
+}
 
     assert (
         "HAVING COUNT(*) > 0"

@@ -1,29 +1,51 @@
-# Virtual environment
+﻿# Python virtual environments
 .venv/
 venv/
+env/
 
-# Secrets
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
 
-# Python
+# Python cache
 __pycache__/
 *.py[cod]
-*.pyo
-.pytest_cache/
+*$py.class
 
-# IDE
+# Pytest and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE files
 .vscode/
 .idea/
 
-# Logs and generated outputs
-logs/
-outputs/charts/*
-outputs/reports/*
-
-# Local temporary database files
-*.db-journal
-*.sqlite-journal
-
-# St*eamlit
+# Streamlit secrets
 .streamlit/secrets.toml
-```*
+
+# Generated outputs
+outputs/
+*.log
+
+# Ollama logs
+ollama-server-output.log
+ollama-server-error.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+~$*
+
+# Local databases
+# Keep the following ignored if the database is generated locally.
+*.db
+*.sqlite
+*.sqlite3

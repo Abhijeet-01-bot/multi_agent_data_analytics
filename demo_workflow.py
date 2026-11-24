@@ -7,13 +7,9 @@ from graph.workflow import (
 
 DEMO_QUESTIONS = [
     (
-        "Show the top five categories by "
-        "revenue in Germany."
-    ),("Show top five categories by net revenue"),
-    (
-        "Show net revenue for orders shipped "
-        "to country XYZ_NONEXISTENT."
-    ),
+        "Compare monthly sales for Beverages "
+        "and Dairy Products."
+    )
 ]
 
 

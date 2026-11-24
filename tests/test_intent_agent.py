@@ -480,3 +480,77 @@ def test_unsupported_request_clears_irrelevant_fields() -> None:
     assert result.analysis_types == []
     assert result.sort_direction is None
     assert result.limit is None
+
+def test_monthly_category_comparison_is_normalized() -> None:
+    local_response = {
+        "business_objective": "Compare",
+        "metrics": [
+            "net_revenue"
+        ],
+        "dimensions": [
+            "category",
+            "product",
+            "order_month",
+        ],
+        "filters": [],
+        "analysis_types": [
+            "aggregation",
+            "comparison",
+            "trend",
+        ],
+        "sort_direction": "descending",
+        "limit": 1,
+        "clarification_required": False,
+        "unsupported_request": False,
+        "confidence": 1.0,
+    }
+
+    agent = IntentUnderstandingAgent(
+        structured_model=(
+            FakeStructuredIntentModel(
+                local_response
+            )
+        )
+    )
+
+    result = agent.analyze(
+        (
+            "Compare monthly sales for "
+            "Beverages and Dairy Products."
+        )
+    )
+
+    assert set(
+        result.dimensions
+    ) == {
+        "category",
+        "order_month",
+    }
+
+    assert len(result.filters) == 1
+
+    category_filter = (
+        result.filters[0]
+    )
+
+    assert (
+        category_filter.field
+        == "category"
+    )
+
+    assert (
+        category_filter.operator
+        == "in"
+    )
+
+    assert category_filter.value == [
+        "Beverages",
+        "Dairy Products",
+    ]
+
+    assert (
+        result.sort_direction
+        is None
+    )
+
+    assert result.limit is None

@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class QueryOperation(str, Enum):
@@ -11,10 +13,42 @@ class QueryOperation(str, Enum):
     TREND = "trend"
 
 
+class QuerySortDirection(str, Enum):
+    ASCENDING = "ascending"
+    DESCENDING = "descending"
+
+
 class QueryFilter(BaseModel):
     field: str
     operator: str
     value: Any
+
+    @field_validator("operator")
+    @classmethod
+    def validate_operator(
+        cls,
+        value: str,
+    ) -> str:
+        normalized = value.strip().lower()
+
+        supported = {
+            "equals",
+            "not_equals",
+            "in",
+            "between",
+            "greater_than",
+            "less_than",
+            "greater_than_or_equal",
+            "less_than_or_equal",
+        }
+
+        if normalized not in supported:
+            raise ValueError(
+                "Unsupported filter operator: "
+                f"{value}"
+            )
+
+        return normalized
 
 
 class QuerySpec(BaseModel):
@@ -32,8 +66,9 @@ class QuerySpec(BaseModel):
         default_factory=list
     )
 
-    sort_metric: str | None = None
-    sort_direction: str | None = None
+    sort_direction: (
+        QuerySortDirection | None
+    ) = None
 
     limit: int | None = Field(
         default=None,

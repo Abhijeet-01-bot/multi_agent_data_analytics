@@ -1,6 +1,7 @@
 from agents.intent_agent import (
     IntentUnderstandingAgent,
 )
+import traceback
 
 
 DEMO_QUESTIONS = [
@@ -8,6 +9,10 @@ DEMO_QUESTIONS = [
         "Show the top five categories by "
         "revenue in Germany."
     ), ("Show top five categories by net revenue."),
+    (
+        "Compare monthly sales for Beverages "
+        "and Dairy Products."
+    ),
     (
         "Show net revenue for orders shipped "
         "to country XYZ_NONEXISTENT."
@@ -34,9 +39,10 @@ def main() -> None:
 
         except Exception as error:
             print(
-                "Intent analysis failed: "
-                f"{error}"
-            )
+        f"Intent analysis failed: {error}"
+    )
+
+            traceback.print_exc()
 
 
 if __name__ == "__main__":

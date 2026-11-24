@@ -1,24 +1,23 @@
-# User interface
+# Multi-Agent Data Analytics System
+# Python 3.12 recommended
+
+# Application UI
 streamlit
 
-# Agent orchestration
-langgraph
+# LLM, Ollama, and orchestration
 langchain-core
+langchain-ollama
+langgraph
+langsmith
 
-# Choose the LLM provider package you will use
-langchain-google-genai
-
-# Data validation
+# Structured configuration and validation
 pydantic
 pydantic-settings
-
-# Environment configuration
 python-dotenv
+PyYAML
 
-# Database
-sqlalchemy
-
-# SQL parsing and validation
+# Database and SQL safety
+SQLAlchemy
 sqlglot
 
 # Data analysis
@@ -26,12 +25,10 @@ pandas
 numpy
 scipy
 
-# Visualizations
+# Visualization
 plotly
 
 # Testing
 pytest
 pytest-mock
-
-
-pyyaml
+anyio

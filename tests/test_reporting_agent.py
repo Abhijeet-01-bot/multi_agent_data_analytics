@@ -581,3 +581,227 @@ def test_evidence_ids_used_are_derived() -> None:
     assert result.evidence_ids_used == [
         "E-T1-RANKING-001"
     ]
+def test_incomplete_line_chart_is_repaired() -> None:
+    evidence = build_evidence()
+
+    evidence_record = (
+        evidence.records[0]
+    )
+
+    evidence_record.source_columns = [
+        "OrderMonth",
+        "OrderCount",
+    ]
+
+    evidence_record.source_rows = [
+        {
+            "OrderMonth": "1996-07",
+            "OrderCount": 22,
+        },
+        {
+            "OrderMonth": "1996-08",
+            "OrderCount": 25,
+        },
+    ]
+
+    chart = (
+        ReportingAgent
+        ._normalize_visualization(
+            visualization={
+                "visualization_id": "V1",
+                "chart_type": "line",
+                "title": (
+                    "Monthly Order Count"
+                ),
+                "description": (
+                    "Monthly order trend."
+                ),
+                "evidence_id": (
+                    evidence_record.evidence_id
+                ),
+                "x_field": None,
+                "y_field": "OrderCount",
+                "series_field": None,
+                "x_axis_title": None,
+                "y_axis_title": (
+                    "Order Count"
+                ),
+                "show_values": False,
+                "metadata": {},
+            },
+            evidence_bundle=evidence,
+        )
+    )
+
+    assert chart["x_field"] == (
+        "OrderMonth"
+    )
+
+    assert chart["y_field"] == (
+        "OrderCount"
+    )
+
+    assert (
+        ReportingAgent
+        ._is_usable_visualization(
+            chart
+        )
+        is True
+    )
+def test_multi_series_line_chart_is_repaired() -> None:
+    evidence = build_evidence()
+
+    evidence_record = (
+        evidence.records[0]
+    )
+
+    evidence_record.source_columns = [
+        "OrderMonth",
+        "CategoryName",
+        "NetRevenue",
+    ]
+
+    evidence_record.source_rows = [
+        {
+            "OrderMonth": "1996-07",
+            "CategoryName": "Beverages",
+            "NetRevenue": 1000.0,
+        },
+        {
+            "OrderMonth": "1996-07",
+            "CategoryName": (
+                "Dairy Products"
+            ),
+            "NetRevenue": 900.0,
+        },
+    ]
+
+    chart = (
+        ReportingAgent
+        ._normalize_visualization(
+            visualization={
+                "visualization_id": "V1",
+                "chart_type": "line",
+                "title": (
+                    "Monthly Revenue Comparison"
+                ),
+                "description": (
+                    "Monthly net revenue "
+                    "by category."
+                ),
+                "evidence_id": (
+                    evidence_record.evidence_id
+                ),
+                "x_field": None,
+                "y_field": None,
+                "series_field": None,
+                "show_values": False,
+                "metadata": {},
+            },
+            evidence_bundle=evidence,
+        )
+    )
+
+    assert chart["x_field"] == (
+        "OrderMonth"
+    )
+
+    assert chart["y_field"] == (
+        "NetRevenue"
+    )
+
+    assert chart[
+        "series_field"
+    ] == "CategoryName"
+def test_unrepairable_chart_does_not_fail_report() -> None:
+    evidence = build_evidence()
+
+    report_data = (
+        build_report().model_dump(
+            mode="json"
+        )
+    )
+
+    report_data[
+        "visualizations"
+    ] = [
+        {
+            "visualization_id": "V-BAD",
+            "chart_type": "line",
+            "title": "Invalid chart",
+            "description": (
+                "No supported axis fields."
+            ),
+            "evidence_id": (
+                evidence.records[
+                    0
+                ].evidence_id
+            ),
+            "x_field": None,
+            "y_field": None,
+            "series_field": None,
+            "show_values": False,
+            "metadata": {},
+        }
+    ]
+
+    normalized = (
+        ReportingAgent
+        ._normalize_report_data(
+            report_data=report_data,
+            evidence_bundle=evidence,
+        )
+    )
+
+    # An incomplete optional chart must either be repaired,
+    # removed, or replaced with a valid fallback.
+    for chart in normalized[
+        "visualizations"
+    ]:
+        chart_type = chart.get(
+            "chart_type"
+        )
+
+        if chart_type in {
+            "line",
+            "bar",
+            "vertical_bar",
+            "horizontal_bar",
+        }:
+            assert chart.get(
+                "x_field"
+            )
+
+            assert chart.get(
+                "y_field"
+            )
+
+        elif chart_type == "kpi":
+            assert chart.get(
+                "value_field"
+            )
+
+    validated = (
+        ExecutiveReport.model_validate(
+            normalized
+        )
+    )
+
+    assert isinstance(
+        validated,
+        ExecutiveReport,
+    )
+def test_missing_evidence_returns_no_fields() -> None:
+    evidence = build_evidence()
+
+    fields = (
+        ReportingAgent
+        ._get_evidence_fields(
+            evidence_id=(
+                "E-NOT-FOUND"
+            ),
+            evidence_bundle=evidence,
+        )
+    )
+
+    assert fields == []
