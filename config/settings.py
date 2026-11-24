@@ -105,6 +105,18 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+    
+    mcp_enabled: bool = False
+
+    mcp_fallback_to_direct: bool = True
+
+    mcp_transport: str = "stdio"
+
+    mcp_server_module: str = (
+        "mcp_servers.analytics_server"
+    )
+
+    mcp_timeout_seconds: int = 30
 
     @property
     def absolute_database_path(self) -> Path:

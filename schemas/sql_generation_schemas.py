@@ -100,6 +100,9 @@ class SQLTaskResult(BaseModel):
     errors: list[str] = Field(
         default_factory=list
     )
+    warnings: list[str] = Field(
+    default_factory=list
+    )
 
     @model_validator(mode="after")
     def validate_success_result(

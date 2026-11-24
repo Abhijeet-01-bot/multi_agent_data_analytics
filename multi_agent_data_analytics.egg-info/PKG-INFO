@@ -1,0 +1,25 @@
+Metadata-Version: 2.4
+Name: multi-agent-data-analytics
+Version: 1.0.0
+Summary: Evidence-grounded multi-agent analytics system using LangGraph, Ollama, MCP, SQLite, and Streamlit
+Requires-Python: >=3.11
+Requires-Dist: streamlit<2.0,>=1.40
+Requires-Dist: langchain-core<2.0,>=0.3
+Requires-Dist: langchain-ollama<2.0,>=0.2
+Requires-Dist: langgraph<2.0,>=0.2
+Requires-Dist: langsmith<1.0,>=0.2
+Requires-Dist: pydantic<3.0,>=2.10
+Requires-Dist: pydantic-settings<3.0,>=2.6
+Requires-Dist: python-dotenv<2.0,>=1.0
+Requires-Dist: PyYAML<7.0,>=6.0
+Requires-Dist: SQLAlchemy<3.0,>=2.0
+Requires-Dist: sqlglot<30.0,>=25.0
+Requires-Dist: pandas<3.0,>=2.2
+Requires-Dist: numpy<3.0,>=2.0
+Requires-Dist: scipy<2.0,>=1.14
+Requires-Dist: plotly<7.0,>=5.24
+Requires-Dist: mcp[cli]<3.0,>=2.3
+Provides-Extra: test
+Requires-Dist: pytest<10.0,>=9.0; extra == "test"
+Requires-Dist: pytest-mock<4.0,>=3.14; extra == "test"
+Requires-Dist: anyio<5.0,>=4.0; extra == "test"

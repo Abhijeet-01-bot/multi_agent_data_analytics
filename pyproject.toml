@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multi-agent-data-analytics"
+version = "1.0.0"
+description = "Evidence-grounded multi-agent analytics system using LangGraph, Ollama, MCP, SQLite, and Streamlit"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.40,<2.0",
+    "langchain-core>=0.3,<2.0",
+    "langchain-ollama>=0.2,<2.0",
+    "langgraph>=0.2,<2.0",
+    "langsmith>=0.2,<1.0",
+    "pydantic>=2.10,<3.0",
+    "pydantic-settings>=2.6,<3.0",
+    "python-dotenv>=1.0,<2.0",
+    "PyYAML>=6.0,<7.0",
+    "SQLAlchemy>=2.0,<3.0",
+    "sqlglot>=25.0,<30.0",
+    "pandas>=2.2,<3.0",
+    "numpy>=2.0,<3.0",
+    "scipy>=1.14,<2.0",
+    "plotly>=5.24,<7.0",
+    "mcp[cli]>=2.3,<3.0"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=9.0,<10.0",
+    "pytest-mock>=3.14,<4.0",
+    "anyio>=4.0,<5.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "agents*",
+    "config*",
+    "database*",
+    "graph*",
+    "mcp_clients*",
+    "mcp_servers*",
+    "prompts*",
+    "schemas*",
+    "semantic*",
+    "services*",
+    "tools*",
+    "ui*"
+]
+exclude = [
+    "tests*",
+    "outputs*"
+]

@@ -32,3 +32,6 @@ plotly
 pytest
 pytest-mock
 anyio
+
+# Model Context Protocol
+mcp[cli]>=2.3,<3.0
