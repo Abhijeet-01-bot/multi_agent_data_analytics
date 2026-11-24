@@ -469,6 +469,46 @@ class IntentUnderstandingAgent:
                 normalized["metrics"]
             )
         )
+                # If a valid metric was recovered deterministically,
+        # clear a stale missing-metric clarification created
+        # by the local model.
+        if normalized["metrics"]:
+            missing_metric_reason = (
+                "No approved metric could be identified "
+                "from the question."
+            )
+
+            normalized[
+                "ambiguity_reasons"
+            ] = [
+                reason
+                for reason in normalized[
+                    "ambiguity_reasons"
+                ]
+                if reason
+                != missing_metric_reason
+            ]
+
+            clarification_question = str(
+                normalized.get(
+                    "clarification_question"
+                )
+                or ""
+            ).lower()
+
+            if (
+                "which approved metric"
+                in clarification_question
+                or "which metric"
+                in clarification_question
+            ):
+                normalized[
+                    "clarification_required"
+                ] = False
+
+                normalized[
+                    "clarification_question"
+                ] = None
 
         # Infer dimensions only when wording is explicit.
         inferred_dimensions = (
@@ -646,13 +686,13 @@ class IntentUnderstandingAgent:
             ] = True
 
             normalized[
-                "clarification_question"
-            ] = (
-                "Which approved metric would you like "
-                "to analyze: net revenue, gross revenue, "
-                "order count, product quantity, or "
-                "average order value?"
-            )
+            "clarification_question"
+        ] = (
+            "Which approved metric would you like "
+            "to analyze: net revenue, gross revenue, "
+            "order count, customer count, product "
+            "quantity, or average order value?"
+        )
 
             ambiguity = (
                 "No approved metric could be identified "
@@ -744,6 +784,10 @@ class IntentUnderstandingAgent:
             r"\bincome\b",
             r"\border count\b",
             r"\borders\b",
+            r"\bcustomer count\b",
+            r"\bnumber of customers\b",
+            r"\bcount of customers\b",
+            r"\bcustomers\b",
             r"\bquantity\b",
             r"\bunits\b",
             r"\baverage order value\b",
@@ -783,6 +827,11 @@ class IntentUnderstandingAgent:
             "orders": "order_count",
             "order count": "order_count",
             "order_count": "order_count",
+            "customers": "customer_count",
+            "customer count": "customer_count",
+            "number of customers": "customer_count",
+            "count of customers": "customer_count",
+            "customer_count": "customer_count",
             "quantity": "product_quantity",
             "units": "product_quantity",
             "product quantity": "product_quantity",
@@ -826,52 +875,106 @@ class IntentUnderstandingAgent:
     def _infer_metrics(
         question: str,
     ) -> list[str]:
+        """
+        Infer approved metrics from explicit wording.
+
+        More specific metric patterns are evaluated before
+        general revenue and order patterns.
+        """
+
         metrics: list[str] = []
 
-        # Check more specific phrases first.
+        # Customer count must be checked before the generic
+        # customer dimension logic.
         if re.search(
-            r"\baverage order value\b|\baov\b",
+            (
+                r"\bnumber\s+of\s+customers?\b"
+                r"|\bcustomer\s+count\b"
+                r"|\bcount\s+of\s+customers?\b"
+                r"|\bhow\s+many\s+customers?\b"
+                r"|\bmost\s+customers?\b"
+                r"|\bfewest\s+customers?\b"
+                r"|\bhighest\s+number\s+of\s+customers?\b"
+                r"|\blowest\s+number\s+of\s+customers?\b"
+            ),
             question,
+            flags=re.IGNORECASE,
+        ):
+            metrics.append(
+                "customer_count"
+            )
+
+        if re.search(
+            (
+                r"\baverage\s+order\s+value\b"
+                r"|\baov\b"
+            ),
+            question,
+            flags=re.IGNORECASE,
         ):
             metrics.append(
                 "average_order_value"
             )
 
         if re.search(
-            r"\bgross revenue\b|\bgross sales\b",
+            (
+                r"\bgross\s+revenue\b"
+                r"|\bgross\s+sales\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             metrics.append(
                 "gross_revenue"
             )
 
         elif re.search(
-            r"\bnet revenue\b|\brevenue\b|\bsales\b|\bincome\b",
+            (
+                r"\bnet\s+revenue\b"
+                r"|\brevenue\b"
+                r"|\bsales\b"
+                r"|\bincome\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             metrics.append(
                 "net_revenue"
             )
 
         if re.search(
-            r"\bhow many orders\b|\bnumber of orders\b|\border count\b|\bcount of orders\b",
+            (
+                r"\bhow\s+many\s+orders?\b"
+                r"|\bnumber\s+of\s+orders?\b"
+                r"|\border\s+count\b"
+                r"|\bcount\s+of\s+orders?\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             metrics.append(
                 "order_count"
             )
 
         if re.search(
-            r"\bquantity\b|\bunits sold\b|\bproduct quantity\b",
+            (
+                r"\bquantity\b"
+                r"|\bunits\s+sold\b"
+                r"|\bproduct\s+quantity\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         ):
             metrics.append(
                 "product_quantity"
             )
 
-        return IntentUnderstandingAgent._merge_unique(
-            [],
-            metrics,
+        return (
+            IntentUnderstandingAgent
+            ._merge_unique(
+                [],
+                metrics,
+            )
         )
 
     @staticmethod
@@ -880,21 +983,28 @@ class IntentUnderstandingAgent:
         dimensions: list[str],
     ) -> list[str]:
         """
-        Remove dimensions inferred from words that are
-        actually part of known Northwind entity values.
-
-        Example:
-        "Dairy Products" is a category value. It must not
-        cause the product dimension to be added.
+        Remove dimensions inferred from words that are part
+        of entity values or from an incorrect local-model
+        interpretation.
         """
 
         normalized_dimensions = list(
-            dict.fromkeys(dimensions)
+            dict.fromkeys(
+                str(dimension)
+                for dimension in dimensions
+            )
         )
 
         lower_question = (
-            user_question.strip().lower()
+            user_question
+            .strip()
+            .lower()
         )
+
+        # ---------------------------------------------
+        # Dairy Products is a category value, not a
+        # request for product-level grouping.
+        # ---------------------------------------------
 
         known_category_names = {
             "beverages",
@@ -938,21 +1048,110 @@ class IntentUnderstandingAgent:
                 if dimension != "product"
             ]
 
+        # ---------------------------------------------
+        # "Country with the most customers" means a
+        # customer-country grouping, not customer-level
+        # grouping.
+        # ---------------------------------------------
+
+        customer_count_by_country = bool(
+            re.search(
+                r"\bcountr(?:y|ies)\b",
+                lower_question,
+                flags=re.IGNORECASE,
+            )
+            and re.search(
+                (
+                    r"\bnumber\s+of\s+customers?\b"
+                    r"|\bcustomer\s+count\b"
+                    r"|\bcount\s+of\s+customers?\b"
+                    r"|\bmost\s+customers?\b"
+                    r"|\bfewest\s+customers?\b"
+                    r"|\bhighest\s+number\s+of\s+"
+                    r"customers?\b"
+                    r"|\blowest\s+number\s+of\s+"
+                    r"customers?\b"
+                ),
+                lower_question,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        if customer_count_by_country:
+            normalized_dimensions = [
+                dimension
+                for dimension
+                in normalized_dimensions
+                if dimension != "customer"
+            ]
+
+            if (
+                "customer_country"
+                not in normalized_dimensions
+            ):
+                normalized_dimensions.append(
+                    "customer_country"
+                )
+
         return normalized_dimensions
      
     @staticmethod
     def _infer_dimensions(
         question: str,
     ) -> list[str]:
+        """
+        Infer approved analytical dimensions from explicit
+        question wording.
+        """
+
+        dimensions: list[str] = []
+
+        # Specific country semantics must run before generic
+        # customer or country inference.
+        customer_country_request = bool(
+            re.search(
+                r"\bcountr(?:y|ies)\b",
+                question,
+                flags=re.IGNORECASE,
+            )
+            and re.search(
+                r"\bcustomers?\b",
+                question,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        shipping_country_request = bool(
+            re.search(
+                (
+                    r"\bshipping\s+countr(?:y|ies)\b"
+                    r"|\bship\s+countr(?:y|ies)\b"
+                    r"|\bshipped\s+to\b"
+                ),
+                question,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        if customer_country_request:
+            dimensions.append(
+                "customer_country"
+            )
+
+        elif shipping_country_request:
+            dimensions.append(
+                "ship_country"
+            )
+
         mappings = [
-                        (
+            (
                 (
                     r"\bcategory\b"
                     r"|\bcategories\b"
                     r"|\bbeverages\b"
                     r"|\bcondiments\b"
                     r"|\bconfections\b"
-                    r"|\bdairy products\b"
+                    r"|\bdairy\s+products\b"
                     r"|\bgrains/cereals\b"
                     r"|\bmeat/poultry\b"
                     r"|\bproduce\b"
@@ -961,15 +1160,22 @@ class IntentUnderstandingAgent:
                 "category",
             ),
             (
-                r"\bcategory\b|\bcategories\b",
-                "category",
-            ),
-            (
-                r"\bproduct\b|\bproducts\b",
+                (
+                    r"\bby\s+product\b"
+                    r"|\bproduct[- ]level\b"
+                    r"|\bindividual\s+products?\b"
+                    r"|\bproduct\s+names?\b"
+                ),
                 "product",
             ),
             (
-                r"\bcustomer\b|\bcustomers\b",
+                (
+                    r"\bby\s+customer\b"
+                    r"|\bper\s+customer\b"
+                    r"|\bcustomer[- ]level\b"
+                    r"|\bindividual\s+customers?\b"
+                    r"|\bcustomer\s+names?\b"
+                ),
                 "customer",
             ),
             (
@@ -981,31 +1187,40 @@ class IntentUnderstandingAgent:
                 "employee",
             ),
             (
-                r"\bmonthly\b|\bby month\b",
+                r"\bmonthly\b|\bby\s+month\b",
                 "order_month",
             ),
             (
-                r"\bquarterly\b|\bby quarter\b",
+                r"\bquarterly\b|\bby\s+quarter\b",
                 "order_quarter",
             ),
             (
-                r"\byearly\b|\bby year\b|\bannual\b",
+                (
+                    r"\byearly\b"
+                    r"|\bby\s+year\b"
+                    r"|\bannual\b"
+                ),
                 "order_year",
             ),
         ]
-
-        dimensions: list[str] = []
 
         for pattern, dimension in mappings:
             if re.search(
                 pattern,
                 question,
+                flags=re.IGNORECASE,
             ):
                 dimensions.append(
                     dimension
                 )
 
-        return dimensions
+        return (
+            IntentUnderstandingAgent
+            ._merge_unique(
+                [],
+                dimensions,
+            )
+        )
 
  
     @staticmethod
@@ -1399,6 +1614,7 @@ class IntentUnderstandingAgent:
                 r"|\baverage\b"
                 r"|\brevenue\b"
                 r"|\bsales\b"
+                r"|\bcustomers?\b"
                 r"|\bcount\b"
                 r"|\bquantity\b"
                 r"|\bunits\b"
@@ -1437,15 +1653,29 @@ class IntentUnderstandingAgent:
     def _extract_limit(
         question: str,
     ) -> int | None:
+        """
+        Extract an explicit ranking limit or infer one for a
+        singular superlative request.
+        """
+
         numeric_match = re.search(
-            r"\b(?:top|bottom)\s+(\d{1,3})\b",
+            (
+                r"\b(?:top|bottom)\s+"
+                r"(\d{1,3})\b"
+            ),
             question,
+            flags=re.IGNORECASE,
         )
 
         if numeric_match:
             return min(
-                int(
-                    numeric_match.group(1)
+                max(
+                    int(
+                        numeric_match.group(
+                            1
+                        )
+                    ),
+                    1,
                 ),
                 100,
             )
@@ -1470,12 +1700,29 @@ class IntentUnderstandingAgent:
                 r"seven|eight|nine|ten)\b"
             ),
             question,
+            flags=re.IGNORECASE,
         )
 
         if word_match:
             return word_numbers[
                 word_match.group(1)
             ]
+
+        # Singular superlatives request one result.
+        if re.search(
+            (
+                r"\bhighest\b"
+                r"|\blowest\b"
+                r"|\bmost\b"
+                r"|\bleast\b"
+                r"|\bfewest\b"
+                r"|\bbest\b"
+                r"|\bworst\b"
+            ),
+            question,
+            flags=re.IGNORECASE,
+        ):
+            return 1
 
         return None
 
@@ -1485,8 +1732,14 @@ class IntentUnderstandingAgent:
     ) -> bool:
         return bool(
             re.search(
-                r"\btop\b|\bhighest\b|\bmost\b|\bbest\b",
+                (
+                    r"\btop\b"
+                    r"|\bhighest\b"
+                    r"|\bmost\b"
+                    r"|\bbest\b"
+                ),
                 question,
+                flags=re.IGNORECASE,
             )
         )
 
@@ -1496,7 +1749,14 @@ class IntentUnderstandingAgent:
     ) -> bool:
         return bool(
             re.search(
-                r"\bbottom\b|\blowest\b|\bleast\b|\bworst\b",
+                (
+                    r"\bbottom\b"
+                    r"|\blowest\b"
+                    r"|\bleast\b"
+                    r"|\bfewest\b"
+                    r"|\bworst\b"
+                ),
                 question,
+                flags=re.IGNORECASE,
             )
         )

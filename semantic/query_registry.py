@@ -54,6 +54,12 @@ METRICS: dict[str, dict[str, Any]] = {
         "alias": "AverageOrderValue",
         "base_table": "Order Details",
     },
+    "customer_count": {
+        "expression": "cu.CustomerID",
+        "aggregation": "COUNT_DISTINCT",
+        "alias": "CustomerCount",
+        "base_table": "Customers",
+    },
 }
 
 

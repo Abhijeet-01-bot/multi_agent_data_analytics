@@ -554,3 +554,93 @@ def test_monthly_category_comparison_is_normalized() -> None:
     )
 
     assert result.limit is None
+
+def test_customer_count_by_country_is_normalized() -> None:
+    local_response = {
+        "business_objective": (
+            "highest number of customers"
+        ),
+        "metrics": [],
+        "dimensions": [
+            "customer"
+        ],
+        "filters": [],
+        "analysis_types": [
+            "aggregation",
+            "ranking",
+        ],
+        "sort_direction": (
+            "descending"
+        ),
+        "limit": None,
+        "ambiguity_reasons": [
+            (
+                "No approved metric could be "
+                "identified from the question."
+            )
+        ],
+        "clarification_required": True,
+        "clarification_question": (
+            "Which approved metric would "
+            "you like to analyze?"
+        ),
+        "unsupported_request": False,
+        "unsupported_reason": None,
+        "confidence": 1.0,
+    }
+
+    agent = IntentUnderstandingAgent(
+        structured_model=(
+            FakeStructuredIntentModel(
+                local_response
+            )
+        )
+    )
+
+    result = agent.analyze(
+        (
+            "Which country has the highest "
+            "number of customers?"
+        )
+    )
+
+    assert result.metrics == [
+        "customer_count"
+    ]
+
+    assert result.dimensions == [
+        "customer_country"
+    ]
+
+    assert (
+        AnalysisType.AGGREGATION
+        in result.analysis_types
+    )
+
+    assert (
+        AnalysisType.RANKING
+        in result.analysis_types
+    )
+
+    assert result.limit == 1
+
+    assert (
+        result.sort_direction
+        == SortDirection.DESCENDING
+    )
+
+    assert (
+        result.clarification_required
+        is False
+    )
+
+    assert (
+        result.clarification_question
+        is None
+    )
+
+    assert (
+        "No approved metric could be "
+        "identified from the question."
+        not in result.ambiguity_reasons
+    )
